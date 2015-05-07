@@ -1,0 +1,322 @@
+
+\RequirePackage{ifplatform}
+\RequirePackage{xmpincl}
+%\RequirePackage{substr}
+%\RequirePackage[iso,english]{isodate}
+
+\newif\ifprov@publisher
+\prov@publisherfalse
+
+
+\DeclareOption{publisher}{
+  \prov@publishertrue%
+}
+
+\ProcessOptions\relax
+
+
+
+
+
+\edef\leftbracechar{\string{}
+\edef\rightbracechar{\string}}
+\edef\leftanglechar{\string<}
+\edef\rightanglechar{\string>}
+\edef\dollarchar{\string$}
+\edef\twidle{\string~}
+\edef\hash{\string#}
+
+\newcommand{\makeurlref}[1]{\leftanglechar#1\rightanglechar}
+
+\newread\file
+
+\ifprov@publisher
+\else
+ %%% Create a UUID for this instance of the output
+ \immediate\write18{uuidgen > \jobname-uuid.tex}
+\fi
+
+\openin\file=\jobname-uuid.tex
+%%% Bug, there is a space at the end of UUID
+\read\file to\theuuid%
+
+
+%%% I can't make use of this macro to trim the space 
+%% \global\def\theuuidFixed{\BeforeSubString{\theuuid}}
+
+
+
+\newwrite\provout
+\newwrite\xmpout
+
+\newcommand{\provlog}[1]{%
+  \ifprov@publisher%
+  \else%
+  \immediate\write\provout{#1}%
+  \fi
+}
+
+\newcommand{\xmplog}[1]{%
+  \ifprov@publisher%
+  \else%
+  \immediate\write\xmpout{#1}%
+  \fi
+}
+
+%%% currently, a tmp file, need \fixttl
+\immediate\openout\provout=\jobname-prov-tmp.ttl
+\provlog{@prefix schema: \makeurlref{http://schema.org/}.}
+\provlog{@prefix foaf: \makeurlref{http://xmlns.com/foaf/0.1/}.}
+\provlog{@prefix prov: \makeurlref{http://www.w3.org/ns/prov\hash}.}
+\provlog{@prefix rdf: \makeurlref{http://www.w3.org/1999/02/22-rdf-syntax-ns\hash}.}
+\provlog{@prefix xmpMM: \makeurlref{http://ns.adobe.com/xap/1.0/mm/}.}
+\provlog{@prefix crypto: \makeurlref{http://www.w3.org/2000/10/swap/crypto\hash}.}
+
+\immediate\openout\xmpout=\jobname.xmp
+
+\def\hasMdFive{crypto:md5 }
+\def\aprovAgent{prov:Agent}
+\def\aprovPerson{prov:Person}
+\def\aprovOrganization{prov:Organization}
+\def\aprovWasAttributedTo{prov:wasAttributedTo }
+\def\aprovWasDerivedFrom{prov:wasDerivedFrom }
+\def\aprovActedOnBehalfOf{prov:actedOnBehalfOf }
+
+
+
+\def\thisresource{%
+  \thisgeneralresource{\theuuid} %
+}
+\def\thisresourceShort{%
+  ex:\theuuid %
+}
+
+\newcommand{\thisresourceShortArg}[1]{%
+  ex:\theuuid-#1 %
+}
+
+\newcommand{\thisgeneralresourceraw}[1]{%
+http://openprovenance.org/documents\hash#1%
+}
+\newcommand{\thisgeneralresource}[1]{%
+  \makeurlref{\thisgeneralresourceraw{#1}} %
+}
+
+\newcommand{\provThis}{%
+  \provlog{\thisresource a prov:Entity .}%
+  %\provlog{\thisresource atTime \printdate{\today}. }%
+}
+
+\newcommand{\provAuthor}[2]{%
+   \provlog{\makeurlref{#2} a \aprovAgent, \aprovPerson ;}%
+   \provlog{       foaf:name "#1" . }%
+   \provlog{\thisresource \aprovWasAttributedTo \makeurlref{#2} .}%
+   #1%
+}
+
+\def\myprovResource{}%
+\def\mybibitem{}%
+
+\newcommand{\provResource}[1]{%
+   \global\def\myprovResource{#1}%
+}
+
+\newcommand{\provOrganization}[2]{%
+   \provlog{\makeurlref{#2} a \aprovAgent, \aprovOrganization ;}%
+   \provlog{       foaf:name "#1" . }%
+   \provlog{\thisresource \aprovWasAttributedTo \makeurlref{#2} .}%
+   #1%
+}
+\newcommand{\provProject}[3]{%
+   \provlog{\makeurlref{#2} a \aprovAgent ;}%
+   \provlog{     foaf:name "#1" ; }%
+   \provlog{     \aprovActedOnBehalfOf \makeurlref{#3} .}%
+   \provlog{\thisresource \aprovWasAttributedTo \makeurlref{#2} .}%
+   \provlog{\makeurlref{#3} a \aprovAgent .}%
+   #1%
+}
+
+\newcommand{\provTitle}[1]{%
+   \provlog{\thisresource schema:headline "#1" .}%
+   #1%
+}
+\newcommand{\provSpecialization}[1]{%
+   \provlog{\thisresource prov:specializationOf \thisgeneralresource{#1} .}%
+   \provlog{\thisgeneralresource{#1} a prov:Entity .}%
+}
+
+\newcommand{\provCitation}[1]{%
+  \provlog{\makeurlref{#1} a prov:Entity .  }%
+  \provlog{\thisresource \aprovWasDerivedFrom \makeurlref{#1} . }%
+}
+
+\newcommand{\provData}[2]{%
+  \provlog{\makeurlref{#1} a prov:Entity, schema:Dataset; rdf:label "#2" .  }%
+  \provlog{\thisresource \aprovWasDerivedFrom \makeurlref{#1} . }%
+}
+
+\newcommand{\provFromData}[1]{%
+  \provlog{\makeurlref{\myprovResource} \aprovWasDerivedFrom \makeurlref{#1} . }%
+}
+
+\newcounter{includecounter}
+
+\newcommand{\provItem}[1]{%
+  \provlog{\thisResource \aprovWasDerivedFrom \makeurlref{#1} . }%
+}
+
+\newcommand{\provInclude}[1]{%
+  \ifprov@publisher
+  \else
+    \refstepcounter{includecounter}%
+    \ifmacosx
+      \immediate\write18{md5 #1 | awk '\leftbracechar print $4\rightbracechar' > \jobname-md5-\theincludecounter.txt}%
+    \else
+     %%% This works on linux
+      \immediate\write18{md5sum #1 | awk '\leftbracechar print $1\rightbracechar' > \jobname-md5-\theincludecounter.txt}%
+    \fi
+  \def\thelocaluri{\makeurlref{http://openprovenance.org/include\hash\theuuid&-\theincludecounter} }%
+  \newread\mdfile\relax%
+  \openin\mdfile=\jobname-md5-\theincludecounter.txt\relax%
+  \read\mdfile to\mdfive%
+  \closein\mdfile%
+  %
+  \fi
+  \provlog{\thisresource \aprovWasDerivedFrom \thelocaluri . }%
+  \provlog{\thelocaluri a prov:Entity . }%
+  \provlog{\thelocaluri schema:contentLocation \makeurlref{#1} . }%
+  \provlog{\thelocaluri prov:alternateOf \makeurlref{\myprovResource} . }%schema:url
+  \provlog{\makeurlref{\myprovResource} a prov:Entity . }%
+  \provlog{\thelocaluri \hasMdFive  "\mdfive&" . }%
+}
+
+
+%%% This command was creating an xmpfile directly wit the provenance, but this was not compatible with xmp format.
+
+\newcommand{\prepareOldXmpFile}{%
+    \immediate\write18{provconvert -infile \jobname-prov.ttl -outfile \jobname-prov.rdf}%
+    \ifmacosx
+      \immediate\write18{sed -e "/s/rdf:RDF/rdf:RDF\space xmpMM:InstanceId='\theuuid'/" \jobname-prov.rdf > \jobname-prov.xmp}%
+    \else
+      %%% on linux, only apply sed to the first occurrence of rdf:RDF
+      \immediate\write18{sed -e "0,/rdf:RDF/s/rdf:RDF/rdf:RDF\space xmpMM:InstanceId='\theuuid'/" \jobname-prov.rdf > \jobname-prov.xmp}%
+      \fi
+      }
+
+\newcommand{\fixttl}{%
+  %%% hack: \read seems to leave a trailing space in \mdfile and \theuuid, so sed'ing it out
+  \immediate\write18{sed -e "s/ >/>/"  \jobname-prov-tmp.ttl | sed -e "s/ &//" | sed -e "s/ &//" > \jobname-prov.ttl}%
+  }
+
+
+\newcommand{\provEmbed}{%
+  \ifprov@publisher
+  \else
+    \xmpcreate%
+    \immediate\closeout\xmpout%  
+    \immediate\closeout\provout%
+    \fixttl%
+    %\prepareOldXmpFile%  now obsolete
+  \fi
+  \includexmp{\jobname}%
+}
+
+\newcommand{\provLocation}[1]{%
+   \global\def\myprovLocation{#1}%
+}
+
+\newcommand{\provBanner}[1]{%
+This document's provenance is embedded in the pdf and can also be found at \url{#1}
+using \url{\thisresource} as {\tt prov:has\_anchor}.
+}
+
+
+\def\@provdoi#1{% 
+  \let\#\relax
+  \let\_\relax
+  \let\textless\relax 
+  \let\textgreater\relax 
+  \edef\x{\toks0={{#1}}}% 
+  \x
+  \edef\#{\@percentchar23}%
+  \edef\_{_}%
+  \edef\textless{\@percentchar3C}% instead of {\string<} for Apple
+  \edef\textgreater{\@percentchar3E}% instead of {\sting>} for Apple
+  \edef\x{\toks1={\noexpand\href{http://dx.doi.org/#1}}}% 
+  \x
+  \edef\x{\toks2={{http://dx.doi.org/#1}}}% 
+  \x
+  \edef\x{\endgroup\doitext\toks1 \the\toks0}%
+  \x
+  \provCitation{\the\toks2}
+}
+
+
+\newcommand{\provBibliography}{%
+  \global\let\oldurl\url
+  \renewcommand{\url}[1]{%
+   \provCitation{##1}
+   \oldurl{##1}%
+  }%
+  \renewcommand{\doi}[1]{%
+    \edef\textunderscore{\string_}
+    \let\_\textunderscore%
+    \catcode`\_\active %
+   \provCitation{http://dx.doi.org/##1}
+   doi:\href{http://dx.doi.org/##1}{##1}%
+  }%
+}%
+
+%%%% The following is style specific
+%%%% eptcs.cls
+\newcommand{\provDatagraphy}[1]{%
+  \renewcommand{\doi}[1]{%
+    \edef\textunderscore{\string_}
+    \let\_\textunderscore%
+    \catcode`\_\active %
+   \provCitation{http://dx.doi.org/##1}
+   doi:\urlalt{http://dx.doi.org/##1}{##1}%
+  }%
+  %% assume bibliography was first
+  \renewcommand{\url}[1]{%
+   \provCitation{##1}%
+   \renewcommand{\urlprefix}{URL: }%
+   \oldurl{##1}%
+   \provData{##1}{\mybibitem}
+  }%
+  \global\let\oldbibitem\bibitem
+  \renewcommand{\bibitem}[1]{%
+   \global\def\mybibitem{##1}%
+   \oldbibitem{##1}%
+  }%
+}
+
+\def\datagraphystyle#1{%
+  \ifx\@begindocumenthook\@undefined\else
+    \expandafter\AtBeginDocument
+  \fi
+    {\if@filesw
+       \immediate\write\@dataaux{\string\bibstyle{#1}}%
+     \fi}}
+
+
+\global\let\oldincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{\provInclude{#2}\oldincludegraphics[#1]{#2}}
+
+
+\newcommand{\provstyurl}{\url{https://github.com/prov-suite/prov-sty}}
+
+\newcommand{\xmpcreate}{%
+  \xmplog{\leftanglechar ?xml version="1.0" encoding="UTF-8"?\rightanglechar}%
+  \xmplog{\leftanglechar rdf:RDF}%
+  \xmplog{      xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"}%
+  \xmplog{      xmlns:prov="http://www.w3.org/ns/prov\hash"}%
+  \xmplog{      xmpMM:InstanceId='\theuuid'}%
+  \xmplog{      xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns\hash"\rightanglechar}%
+  \xmplog{ \leftanglechar rdf:Description rdf:about=""\rightanglechar}%
+  \xmplog{   \leftanglechar prov:alternate rdf:resource="\thisgeneralresourceraw{\theuuid}"/\rightanglechar}%
+  \xmplog{   \leftanglechar prov:has_anchor rdf:resource="\thisgeneralresourceraw{\theuuid}"/\rightanglechar}%
+  \xmplog{   \leftanglechar prov:has_provenance rdf:resource="\myprovLocation"/\rightanglechar}%
+  \xmplog{ \leftanglechar/rdf:Description\rightanglechar}%
+  \xmplog{\leftanglechar/rdf:RDF\rightanglechar}%
+}

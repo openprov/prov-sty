@@ -3,7 +3,7 @@ A LaTeX style for POV
 
 ---
 
-TeXpertise welcome! We welcome pull requests to improve this style, and make it robust to other latex style.  
+TeXpertise welcome! We welcome pull requests to improve this style, and make it robust to other latex styles.  
 
 ---
 

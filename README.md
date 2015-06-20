@@ -1,5 +1,5 @@
 # prov-sty
-A LaTeX style for POV
+A LaTeX style for PROV
 
 ---
 

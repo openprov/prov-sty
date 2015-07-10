@@ -1,6 +1,9 @@
 
 \RequirePackage{ifplatform}
 \RequirePackage{xmpincl}
+\RequirePackage{graphics}
+\RequirePackage{doi}
+\RequirePackage{hyperref}
 %\RequirePackage{substr}
 %\RequirePackage[iso,english]{isodate}
 
@@ -226,7 +229,7 @@ http://openprovenance.org/documents\hash#1%
 }
 
 \newcommand{\provBanner}[1]{%
-This document's provenance is embedded in the pdf and can also be found at \url{#1}
+This document's provenance is embedded in the pdf and can also be found at \url{\myprovLocation}
 using \url{\thisresource} as {\tt prov:has\_anchor}.
 }
 
